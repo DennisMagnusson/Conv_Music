@@ -14,8 +14,6 @@ cmd:option('-o', '', 'Model filename')
 cmd:option('-ep', 1, 'Number of epochs')
 cmd:option('-batchsize', 256, 'Batch Size')
 cmd:option('-rho', 50, 'Rho value')
-cmd:option('-recurrenttype', 'FastLSTM', 'Type of recurrent layer (FastLSTM, LSTM, GRU)')
-cmd:option('-recurrentlayers', 1, 'Number of recurrent layers')
 cmd:option('-denselayers', 1, 'Number of dense layers')
 cmd:option('-hiddensizes', '100,100', 'Sizes of hidden layers, seperated by commas')
 cmd:option('-dropout', 0.5, 'Dropout probability')
@@ -48,7 +46,7 @@ if #opt.hiddensizes ~= opt.recurrentlayers+opt.denselayers then
 	assert(false, "Number of hiddensizes is not equal to number of layers")
 end
 
-data_width = 93
+data_width = 88
 curr_ep = 1
 start_ep = 0
 start_index = 1
@@ -65,8 +63,6 @@ prev_valid = 0
 meta = {batchsize=opt.batchsize,
 		rho=opt.rho,
 		ep=opt.ep,
-		recurrenttype=opt.recurrenttype,
-		recurrentlayers=opt.recurrentlayers,
 		denselayers=opt.denselayers,
 		hiddensizes=opt.hiddensizes,
 		dropout=opt.dropout,
@@ -194,7 +190,7 @@ function train()
 				xlua.progress(100*(e-1)+progress, 100*opt.ep)
 			end
 
-			optim.rmsprop(feval, params, optim_cfg)
+			optim.adam(feval, params, optim_cfg)
 			collectgarbage()
 		end
 	end
@@ -255,35 +251,14 @@ end
 
 function create_model()
 	local model = nn.Sequential()
-	local rnn = nn.Sequential()
-	local l = 1
-	
-	if opt.recurrenttype == 'FastLSTM' then recurrent = nn.FastLSTM
-	elseif opt.recurrenttype == 'LSTM' then recurrent = nn.LSTM
-	elseif opt.recurrenttype == 'GRU'  then recurrent = nn.GRU
-	else assert(false, "Error: Invalid recurrent type") end
 
-	--Recurrent input layer
-	rnn:add(recurrent(data_width, opt.hiddensizes[l], opt.rho))
-	rnn:add(nn.SoftSign())
-	for i=1, opt.recurrentlayers-1 do
-		l = l + 1
-		--rnn:add(nn.Dropout(opt.dropout)) TODO Remove very temporary test
-		rnn:add(recurrent(opt.hiddensizes[l-1], opt.hiddensizes[l], opt.rho))
-		rnn:add(nn.SoftSign())
-	end
-	model:add(nn.SplitTable(1,2))
-	model:add(nn.Sequencer(rnn))
-	model:add(nn.SelectTable(-1))
-	--Dense layers
-	for i=1, opt.denselayers do
-		l = l + 1
-		--model:add(nn.Dropout(opt.dropout)) TODO Remove very temporary test
-		model:add(nn.Linear(opt.hiddensizes[l-1], opt.hiddensizes[l]))
-		model:add(nn.Sigmoid())
-	end
+	--TODO, lol
+
+	--Some conv layers around here
+	--Some ReLUs right around here
+	
 	--Output layer
-	--model:add(nn.Dropout(opt.dropout)) TODO Remove very temporary test
+	model:add(nn.Dropout(opt.dropout))
 	model:add(nn.Linear(opt.hiddensizes[l], data_width))
 	model:add(nn.Sigmoid())
 
@@ -336,8 +311,8 @@ if opt.opencl then criterion:cl() end
 
 data = create_dataset(opt.d)
 
-data = normalize_col(data, 92)
-data = normalize_col(data, 93)
+--data = normalize_col(data, 92)
+--data = normalize_col(data, 93)
 
 if opt.datasize ~= 0 then
 	local l = #data
