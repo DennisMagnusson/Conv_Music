@@ -253,10 +253,19 @@ function create_model()
 	local model = nn.Sequential()
 
 	--TODO, lol
+	--Input is 88x16 for now
+	--Or is it 16x88?
+	--Is pooling a bad idea? I think so
+	--12x1 convolution with 20 output channels
+	model:add(nn.SpatialConvolution(1, 20, 12, 1, 1, 1, 6, 0))
+	model:add(nn.ReLU())
+	--12x4 conv with 40 output channels
+	model:add(nn.SpatialConvolution(20, 40, 12, 4, 1, 1, 6, 2))
+	model:add(nn.ReLU())
 
-	--Some conv layers around here
-	--Some ReLUs right around here
-	
+	model:add(nn.Collapse(3))
+	model:add(nn.Linear(40*88*16, 1024))
+
 	--Output layer
 	model:add(nn.Dropout(opt.dropout))
 	model:add(nn.Linear(opt.hiddensizes[l], data_width))
