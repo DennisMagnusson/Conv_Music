@@ -11,13 +11,13 @@ cmd:option('-vd', '', 'Validation data directory')
 cmd:option('-datasize', 0, 'Size of dataset (for benchmarking)')
 cmd:option('-o', '', 'Model filename')
 cmd:option('-ep', 1, 'Number of epochs')
-cmd:option('-batchsize', 256, 'Batch Size')
+cmd:option('-batchsize', 128, 'Batch Size')
 cmd:option('-rho', 16, 'Rho value')
 cmd:option('-denselayers', 1, 'Number of dense layers')
 cmd:option('-channels', '2,5', 'Sizes of hidden layers, seperated by commas')
 cmd:option('-dropout', 0.5, 'Dropout probability')
-cmd:option('-lr', 0.001, 'Learning rate')
-cmd:option('-lrdecay', 1e-6, 'Learning rate decay')
+cmd:option('-lr', 0.0001, 'Learning rate')
+cmd:option('-lrdecay', 1e-5, 'Learning rate decay')
 cmd:option('-cpu', false, 'Use CPU')
 cmd:option('-weightdecay', 0, 'Weight decay')
 opt = cmd:parse(arg or {})
@@ -164,6 +164,7 @@ function feval(p)
 	local x = batch[1]
 	--TODO Remove this line to switch to rnn
 	x = torch.reshape(x, opt.batchsize, 1, data_width, opt.rho)
+	--print(x:size())
 	local y = batch[2]
 
 	gradparams:zero()
@@ -253,47 +254,50 @@ end
 function create_model()
 	local model = nn.Sequential()
 
-	--TODO Learning rate decay
-
 	--Input is 88x16 for now
 	--Or is it 16x88?
 	--Is pooling a bad idea? I think so
 	--12x1 convolution with 20 output channels
 	--Input channels, output channels, kernel width, kernel height, stepx,y, padx,y)
+	--Hmm, pooling hardly does anything for the performance
 
-	model:add(nn.SpatialConvolution(1, opt.channels[1], 13, 5, 1, 1, 6, 2))
+	model:add(nn.SpatialConvolution(1, opt.channels[1], 3, 13, 1, 1, 1, 6))
 	model:add(nn.ReLU())
+	--model:add(nn.SpatialMaxPooling(1, 5, 1, 4, 0, 2))
+	--model:add(nn.SpatialMaxPooling(4, 1, 4, 1, 2, 0))
 	--12x4 conv with 40 output channels
-	model:add(nn.SpatialConvolution(opt.channels[1], opt.channels[2], 9, 5, 1, 1, 4, 2))
+	model:add(nn.SpatialConvolution(opt.channels[1], opt.channels[2], 5, 9, 1, 1, 2, 4))
+	--model:add(nn.SpatialMaxPooling(4, 1, 4, 1, 2, 0))
 	model:add(nn.ReLU())
-	--model:add(nn.SpatialConvolution(opt.channels[2], opt.channels[3], 3, 3, 1, 1, 1, 1))
-	--model:add(nn.ReLU())
+
+	--Idea: pooling on the y-axis, to drastically reduce computation, so 1xrho pooling
 
 	model:add(nn.Reshape(opt.channels[2]*data_width*opt.rho))
-	model:add(nn.Linear(opt.channels[2]*data_width*opt.rho, 1024))
+	model:add(nn.Linear(opt.channels[2]*data_width*opt.rho, 128))
 
 	--Output layer
 	model:add(nn.Dropout(opt.dropout))
-	model:add(nn.Linear(1024, data_width))
+	model:add(nn.Linear(128, data_width))
 	model:add(nn.Sigmoid())
-	
 	
 	--Let's compare to a recurrent
 	--[[
 	--TODO RemoveMe
 	local rnn = nn.Sequential()
-	rnn:add(nn.FastLSTM(88, 512, opt.rho))
+	rnn:add(nn.FastLSTM(88, 256, opt.rho))
 	rnn:add(nn.SoftSign())
-	rnn:add(nn.FastLSTM(512, 256, opt.rho))
+	rnn:add(nn.FastLSTM(256, 128, opt.rho))
 	rnn:add(nn.SoftSign())
 	model:add(nn.SplitTable(1, 2))
 	model:add(nn.Sequencer(rnn))
 	model:add(nn.SelectTable(-1))
 	--model:add(nn.Dropout(opt.dropout))
-	model:add(nn.Linear(256, 256))
-	model:add(nn.Linear(256, 88))
+	model:add(nn.Linear(128, 128))
+	model:add(nn.SoftSign())
+	model:add(nn.Linear(128, 88))
 	model:add(nn.Sigmoid())
 	]]
+
 
 	if opt.opencl then 
 		return model:cl()
