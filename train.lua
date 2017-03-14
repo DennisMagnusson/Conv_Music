@@ -1,7 +1,5 @@
 require 'midiparse'
-require 'validate'
 require 'lfs'
-require 'rnn'
 require 'optim'
 require 'xlua'
 json = require 'json'
@@ -13,7 +11,7 @@ cmd:option('-datasize', 0, 'Size of dataset (for benchmarking)')
 cmd:option('-o', '', 'Model filename')
 cmd:option('-ep', 1, 'Number of epochs')
 cmd:option('-batchsize', 256, 'Batch Size')
-cmd:option('-rho', 50, 'Rho value')
+cmd:option('-rho', 16, 'Rho value')
 cmd:option('-denselayers', 1, 'Number of dense layers')
 cmd:option('-hiddensizes', '100,100', 'Sizes of hidden layers, seperated by commas')
 cmd:option('-dropout', 0.5, 'Dropout probability')
@@ -25,6 +23,8 @@ opt = cmd:parse(arg or {})
 
 opt.opencl = not opt.cpu
 
+require 'validate'
+
 if opt.opencl then
 	require 'cltorch'
 	require 'clnn'
@@ -33,6 +33,7 @@ else
 	require 'nn'
 end
 
+--[[
 local h = opt.hiddensizes
 opt.hiddensizes = {}
 while true do
@@ -45,6 +46,7 @@ end
 if #opt.hiddensizes ~= opt.recurrentlayers+opt.denselayers then
 	assert(false, "Number of hiddensizes is not equal to number of layers")
 end
+]]
 
 data_width = 88
 curr_ep = 1
@@ -163,6 +165,8 @@ function feval(p)
 
 	batch = next_batch()
 	local x = batch[1]
+	x = torch.reshape(x, 256, 1, data_width, opt.rho)
+	print(x:size())
 	local y = batch[2]
 
 	gradparams:zero()
@@ -252,23 +256,23 @@ end
 function create_model()
 	local model = nn.Sequential()
 
-	--TODO, lol
 	--Input is 88x16 for now
 	--Or is it 16x88?
 	--Is pooling a bad idea? I think so
 	--12x1 convolution with 20 output channels
-	model:add(nn.SpatialConvolution(1, 20, 12, 1, 1, 1, 6, 0))
+	--Input channels, output channels, kernel width, kernel height, stepx,y, padx,y)
+	model:add(nn.SpatialConvolution(1, 20, 13, 1, 1, 1, 6, 0))
 	model:add(nn.ReLU())
 	--12x4 conv with 40 output channels
-	model:add(nn.SpatialConvolution(20, 40, 12, 4, 1, 1, 6, 2))
+	model:add(nn.SpatialConvolution(20, 40, 5, 5, 1, 1, 2, 2))
 	model:add(nn.ReLU())
 
-	model:add(nn.Collapse(3))
+	model:add(nn.Reshape(40*data_width*opt.rho))
 	model:add(nn.Linear(40*88*16, 1024))
 
 	--Output layer
 	model:add(nn.Dropout(opt.dropout))
-	model:add(nn.Linear(opt.hiddensizes[l], data_width))
+	model:add(nn.Linear(1024, data_width))
 	model:add(nn.Sigmoid())
 
 	if opt.opencl then 

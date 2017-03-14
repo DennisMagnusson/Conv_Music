@@ -3,11 +3,14 @@ require 'lfs'
 require 'rnn'
 require 'optim'
 
-require 'cltorch'
-require 'clnn'
+if opt.opencl then
+	require 'cltorch'
+	require 'clnn'
+else
+	require 'torch'
+	require 'nn'
+end
 
-local major = {0, 2, 4, 5, 7, 9, 11}
-local minor = {0, 2, 3, 5, 7, 8, 10}
 
 function validate(model, rho, batchsize,dir, criterion)
 	local valid_data = create_data(dir) --Faster than saving
@@ -29,8 +32,13 @@ function validate(model, rho, batchsize,dir, criterion)
 			bs = bs+1
 
 			if bs == batchsize then
-				local pred = model:forward(x:cl())
-				local err = criterion:forward(pred, y:cl())
+				if opt.opencl then
+					local pred = model:forward(x:cl())
+					local err = criterion:forward(pred, y:cl())
+				else
+					local pred = model:forward(x)
+					local err = criterion:forward(pred, y)
+				end
 				toterr = toterr + err
 				x = torch.zeros(batchsize, rho, 93)
 				y = torch.zeros(batchsize, 93)
