@@ -89,8 +89,7 @@ function parse(filename)
 		r[#r+1] = frame
 		::EOL::
 	end
-
-	for i in #r do
+	for i=1, #r do
 		--Remove the non-notes
 		--(Not the most efficient way)
 		r[i][89] = nil
