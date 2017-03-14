@@ -14,10 +14,10 @@ cmd:option('-ep', 1, 'Number of epochs')
 cmd:option('-batchsize', 256, 'Batch Size')
 cmd:option('-rho', 16, 'Rho value')
 cmd:option('-denselayers', 1, 'Number of dense layers')
-cmd:option('-hiddensizes', '100,100', 'Sizes of hidden layers, seperated by commas')
+cmd:option('-channels', '2,5', 'Sizes of hidden layers, seperated by commas')
 cmd:option('-dropout', 0.5, 'Dropout probability')
 cmd:option('-lr', 0.001, 'Learning rate')
-cmd:option('-lrdecay', 1e-5, 'Learning rate decay')
+cmd:option('-lrdecay', 1e-6, 'Learning rate decay')
 cmd:option('-cpu', false, 'Use CPU')
 cmd:option('-weightdecay', 0, 'Weight decay')
 opt = cmd:parse(arg or {})
@@ -34,20 +34,16 @@ else
 	require 'nn'
 end
 
---[[
-local h = opt.hiddensizes
-opt.hiddensizes = {}
+
+local h = opt.channels
+opt.channels = {}
 while true do
 	if h:len() == 0 then break end
 	local c = h:find(',') or h:len()+1
 	local str = h:sub(1, c-1)
 	h = h:sub(c+1, h:len())
-	opt.hiddensizes[#opt.hiddensizes+1] = tonumber(str)
+	opt.channels[#opt.channels+1] = tonumber(str)
 end
-if #opt.hiddensizes ~= opt.recurrentlayers+opt.denselayers then
-	assert(false, "Number of hiddensizes is not equal to number of layers")
-end
-]]
 
 data_width = 88
 curr_ep = 1
@@ -257,37 +253,45 @@ end
 function create_model()
 	local model = nn.Sequential()
 
+	--TODO Learning rate decay
+
 	--Input is 88x16 for now
 	--Or is it 16x88?
 	--Is pooling a bad idea? I think so
 	--12x1 convolution with 20 output channels
 	--Input channels, output channels, kernel width, kernel height, stepx,y, padx,y)
-	model:add(nn.SpatialConvolution(1, 20, 13, 1, 1, 1, 6, 0))
+
+	model:add(nn.SpatialConvolution(1, opt.channels[1], 13, 5, 1, 1, 6, 2))
 	model:add(nn.ReLU())
 	--12x4 conv with 40 output channels
-	model:add(nn.SpatialConvolution(20, 40, 5, 5, 1, 1, 2, 2))
+	model:add(nn.SpatialConvolution(opt.channels[1], opt.channels[2], 9, 5, 1, 1, 4, 2))
 	model:add(nn.ReLU())
+	--model:add(nn.SpatialConvolution(opt.channels[2], opt.channels[3], 3, 3, 1, 1, 1, 1))
+	--model:add(nn.ReLU())
 
-	model:add(nn.Reshape(40*data_width*opt.rho))
-	model:add(nn.Linear(40*data_width*opt.rho, 1024))
+	model:add(nn.Reshape(opt.channels[2]*data_width*opt.rho))
+	model:add(nn.Linear(opt.channels[2]*data_width*opt.rho, 1024))
 
 	--Output layer
 	model:add(nn.Dropout(opt.dropout))
 	model:add(nn.Linear(1024, data_width))
 	model:add(nn.Sigmoid())
 	
+	
 	--Let's compare to a recurrent
+	--[[
 	--TODO RemoveMe
-	--[[local rnn = nn.Sequential()
-	rnn:add(nn.FastLSTM(88, 256, opt.rho))
+	local rnn = nn.Sequential()
+	rnn:add(nn.FastLSTM(88, 512, opt.rho))
 	rnn:add(nn.SoftSign())
-	rnn:add(nn.FastLSTM(256, 128, opt.rho))
+	rnn:add(nn.FastLSTM(512, 256, opt.rho))
 	rnn:add(nn.SoftSign())
 	model:add(nn.SplitTable(1, 2))
 	model:add(nn.Sequencer(rnn))
 	model:add(nn.SelectTable(-1))
 	--model:add(nn.Dropout(opt.dropout))
-	model:add(nn.Linear(128, 88))
+	model:add(nn.Linear(256, 256))
+	model:add(nn.Linear(256, 88))
 	model:add(nn.Sigmoid())
 	]]
 
