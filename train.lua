@@ -165,8 +165,7 @@ function feval(p)
 
 	batch = next_batch()
 	local x = batch[1]
-	x = torch.reshape(x, 256, 1, data_width, opt.rho)
-	print(x:size())
+	x = torch.reshape(x, opt.batchsize, 1, data_width, opt.rho)
 	local y = batch[2]
 
 	gradparams:zero()

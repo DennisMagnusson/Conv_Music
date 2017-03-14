@@ -12,15 +12,15 @@ else
 end
 
 
-function validate(model, rho, batchsize,dir, criterion)
+function validate(model, rho, batchsize, dir, criterion)
 	local valid_data = create_data(dir) --Faster than saving
 
 	local toterr = 0
 	local c = 0
 	local bs = 1
 
-	local x = torch.Tensor(batchsize, rho, 93)
-	local y = torch.Tensor(batchsize, 93)
+	local x = torch.Tensor(batchsize, rho, 88)
+	local y = torch.Tensor(batchsize, 88)
 
 	for _, song in pairs(valid_data) do
 		for i=1, #song-rho-2 do
@@ -32,16 +32,19 @@ function validate(model, rho, batchsize,dir, criterion)
 			bs = bs+1
 
 			if bs == batchsize then
+				x = torch.reshape(x, batchsize, 1, 88, rho)
+				local err = 0
+				local pred = nil
 				if opt.opencl then
-					local pred = model:forward(x:cl())
-					local err = criterion:forward(pred, y:cl())
+					pred = model:forward(x:cl())
+					err = criterion:forward(pred, y:cl())
 				else
-					local pred = model:forward(x)
-					local err = criterion:forward(pred, y)
+					pred = model:forward(x)
+					err = criterion:forward(pred, y)
 				end
 				toterr = toterr + err
-				x = torch.zeros(batchsize, rho, 93)
-				y = torch.zeros(batchsize, 93)
+				x = torch.zeros(batchsize, rho, 88)
+				y = torch.zeros(batchsize, 88)
 				c = c+1
 				bs = 1
 			end
@@ -72,7 +75,7 @@ function create_data(dir)
 		songs[#songs+1] = song
 		::cont::
 	end
-	songs = normalize(songs, 92)
-	songs = normalize(songs, 93)
+	--songs = normalize(songs, 92)
+	--songs = normalize(songs, 93)
 	return songs
 end
