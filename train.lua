@@ -2,6 +2,7 @@ require 'midiparse'
 require 'lfs'
 require 'optim'
 require 'xlua'
+require 'rnn' --TODO Remove, just for a quick test
 json = require 'json'
 
 cmd = torch.CmdLine()
@@ -15,7 +16,7 @@ cmd:option('-rho', 16, 'Rho value')
 cmd:option('-denselayers', 1, 'Number of dense layers')
 cmd:option('-hiddensizes', '100,100', 'Sizes of hidden layers, seperated by commas')
 cmd:option('-dropout', 0.5, 'Dropout probability')
-cmd:option('-lr', 0.01, 'Learning rate')
+cmd:option('-lr', 0.001, 'Learning rate')
 cmd:option('-lrdecay', 1e-5, 'Learning rate decay')
 cmd:option('-cpu', false, 'Use CPU')
 cmd:option('-weightdecay', 0, 'Weight decay')
@@ -165,6 +166,7 @@ function feval(p)
 
 	batch = next_batch()
 	local x = batch[1]
+	--TODO Remove this line to switch to rnn
 	x = torch.reshape(x, opt.batchsize, 1, data_width, opt.rho)
 	local y = batch[2]
 
@@ -267,12 +269,27 @@ function create_model()
 	model:add(nn.ReLU())
 
 	model:add(nn.Reshape(40*data_width*opt.rho))
-	model:add(nn.Linear(40*88*16, 1024))
+	model:add(nn.Linear(40*data_width*opt.rho, 1024))
 
 	--Output layer
 	model:add(nn.Dropout(opt.dropout))
 	model:add(nn.Linear(1024, data_width))
 	model:add(nn.Sigmoid())
+	
+	--Let's compare to a recurrent
+	--TODO RemoveMe
+	--[[local rnn = nn.Sequential()
+	rnn:add(nn.FastLSTM(88, 256, opt.rho))
+	rnn:add(nn.SoftSign())
+	rnn:add(nn.FastLSTM(256, 128, opt.rho))
+	rnn:add(nn.SoftSign())
+	model:add(nn.SplitTable(1, 2))
+	model:add(nn.Sequencer(rnn))
+	model:add(nn.SelectTable(-1))
+	--model:add(nn.Dropout(opt.dropout))
+	model:add(nn.Linear(128, 88))
+	model:add(nn.Sigmoid())
+	]]
 
 	if opt.opencl then 
 		return model:cl()

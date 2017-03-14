@@ -32,6 +32,7 @@ function validate(model, rho, batchsize, dir, criterion)
 			bs = bs+1
 
 			if bs == batchsize then
+				--TODO Remove this line for rnn
 				x = torch.reshape(x, batchsize, 1, 88, rho)
 				local err = 0
 				local pred = nil
