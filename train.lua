@@ -162,9 +162,15 @@ function feval(p)
 
 	batch = next_batch()
 	local x = batch[1]
+	--FIXME Reshape is probably wrong, should be transposed
+	--TODO FIgure this shit out
+	for i=1, opt.batchsize do
+		--x[i] = x[i]:t()
+	end
 	--TODO Remove this line to switch to rnn
+	print(x:size())
 	x = torch.reshape(x, opt.batchsize, 1, data_width, opt.rho)
-	--print(x:size())
+	print(x:size())
 	local y = batch[2]
 
 	gradparams:zero()
@@ -262,7 +268,6 @@ function create_model()
 	--12x1 convolution with 20 output channels
 	--Input channels, output channels, kernel width, kernel height, stepx,y, padx,y)
 	--Hmm, pooling hardly does anything for the performance
-
 	model:add(nn.SpatialConvolution(1, opt.channels[1], 5, 13, 1, 1, 2, 6))
 	model:add(nn.ReLU())
 	--model:add(nn.SpatialMaxPooling(1, 5, 1, 4, 0, 2))
@@ -299,7 +304,6 @@ function create_model()
 	model:add(nn.Linear(128, 88))
 	model:add(nn.Sigmoid())
 	]]
-
 
 	if opt.opencl then 
 		return model:cl()
