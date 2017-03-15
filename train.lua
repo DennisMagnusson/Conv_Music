@@ -168,9 +168,9 @@ function feval(p)
 	--Size is currently bsXrhoXw
 	--We want bsXwXrho
 	x:transpose(2,3)
-	torch.reshape(x, opt.batchsize, 1, opt.rho, data_width)
+	--torch.reshape(x, opt.batchsize, 1, opt.rho, data_width)
 	print(x:size())
-	--x = torch.reshape(x, opt.batchsize, 1, data_width, opt.rho)
+	x = torch.reshape(x, opt.batchsize, 1, data_width, opt.rho)
 	--Hmmm. Wrong number of input channels
 	print(x:size())
 	--Should be correct at this point. But it isn't
