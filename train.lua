@@ -164,13 +164,16 @@ function feval(p)
 	local x = batch[1]
 	--FIXME Reshape is probably wrong, should be transposed
 	--TODO FIgure this shit out
-	for i=1, opt.batchsize do
-		--x[i] = x[i]:t()
-	end
 	--TODO Remove this line to switch to rnn
+	--Size is currently bsXrhoXw
+	--We want bsXwXrho
+	x:transpose(2,3)
+	torch.reshape(x, opt.batchsize, 1, opt.rho, data_width)
 	print(x:size())
-	x = torch.reshape(x, opt.batchsize, 1, data_width, opt.rho)
+	--x = torch.reshape(x, opt.batchsize, 1, data_width, opt.rho)
+	--Hmmm. Wrong number of input channels
 	print(x:size())
+	--Should be correct at this point. But it isn't
 	local y = batch[2]
 
 	gradparams:zero()
