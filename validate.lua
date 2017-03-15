@@ -32,16 +32,19 @@ function validate(model, rho, batchsize, dir, criterion)
 			bs = bs+1
 
 			if bs == batchsize then
-				--TODO Remove this line for rnn
+				--Remove this line for rnn
+				x = x:transpose(2, 3)
 				x = torch.reshape(x, batchsize, 1, 88, rho)
 				local err = 0
 				local pred = nil
 				if opt.opencl then
 					pred = model:forward(x:cl())
-					err = criterion:forward(pred, y:cl())
+					err = torch.mean(torch.abs(y:cl() - pred))
+					--err = criterion:forward(pred, y:cl())
 				else
 					pred = model:forward(x)
-					err = criterion:forward(pred, y)
+					err = torch.mean(torch.abs(y - pred))
+					--err = criterion:forward(pred, y)
 				end
 				toterr = toterr + err
 				x = torch.zeros(batchsize, rho, 88)

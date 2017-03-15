@@ -162,26 +162,17 @@ function feval(p)
 
 	batch = next_batch()
 	local x = batch[1]
-	--FIXME Reshape is probably wrong, should be transposed
-	--TODO FIgure this shit out
-	--TODO Remove this line to switch to rnn
-	--Size is currently bsXrhoXw
-	--We want bsXwXrho
-	x:transpose(2,3)
-	--torch.reshape(x, opt.batchsize, 1, opt.rho, data_width)
-	print(x:size())
+
+	--Remove these lines to switch to rnn
+	x = x:transpose(2, 3)
 	x = torch.reshape(x, opt.batchsize, 1, data_width, opt.rho)
-	--Hmmm. Wrong number of input channels
-	print(x:size())
-	--Should be correct at this point. But it isn't
 	local y = batch[2]
 
 	gradparams:zero()
 	local yhat = model:forward(x)
 	local loss = criterion:forward(yhat, y)
 	local e = torch.mean(torch.abs(yhat-y))
-	--totloss = totloss + loss
-	totloss = totloss + e
+	totloss = totloss + e--Use real error instead of criterion
 	model:backward(x, criterion:backward(yhat, y))
 
 	collectgarbage()
