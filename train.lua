@@ -170,7 +170,9 @@ function feval(p)
 	gradparams:zero()
 	local yhat = model:forward(x)
 	local loss = criterion:forward(yhat, y)
-	totloss = totloss + loss
+	local e = torch.mean(torch.abs(yhat-y))
+	--totloss = totloss + loss
+	totloss = totloss + e
 	model:backward(x, criterion:backward(yhat, y))
 
 	collectgarbage()
@@ -261,12 +263,12 @@ function create_model()
 	--Input channels, output channels, kernel width, kernel height, stepx,y, padx,y)
 	--Hmm, pooling hardly does anything for the performance
 
-	model:add(nn.SpatialConvolution(1, opt.channels[1], 3, 13, 1, 1, 1, 6))
+	model:add(nn.SpatialConvolution(1, opt.channels[1], 5, 13, 1, 1, 2, 6))
 	model:add(nn.ReLU())
 	--model:add(nn.SpatialMaxPooling(1, 5, 1, 4, 0, 2))
 	--model:add(nn.SpatialMaxPooling(4, 1, 4, 1, 2, 0))
 	--12x4 conv with 40 output channels
-	model:add(nn.SpatialConvolution(opt.channels[1], opt.channels[2], 5, 9, 1, 1, 2, 4))
+	model:add(nn.SpatialConvolution(opt.channels[1], opt.channels[2], 5, 5, 1, 1, 2, 2))
 	--model:add(nn.SpatialMaxPooling(4, 1, 4, 1, 2, 0))
 	model:add(nn.ReLU())
 
@@ -343,7 +345,8 @@ else
 end
 
 params, gradparams = model:getParameters()
-criterion = nn.MSECriterion(true)
+--criterion = nn.MSECriterion(true)
+criterion = nn.BCECriterion()--BCE is waaaay better
 if opt.opencl then criterion:cl() end
 
 data = create_dataset(opt.d)
