@@ -9,7 +9,7 @@ local midi = require 'MIDI'
 93		duration
 ]]
 
-function parse(filename)
+function parse(filename, time=false)
 	local file = assert(io.open(filename, 'r'))
 	local m = midi.midi2ms_score(file:read("*all"))
 	file:close()
@@ -95,8 +95,11 @@ function parse(filename)
 		r[i][89] = nil
 		r[i][90] = nil
 		r[i][91] = nil
-		r[i][92] = nil
 		r[i][93] = nil
+		if time then
+			r[i][89] = r[i][92]
+		end
+		r[i][92] = nil
 	end
 
 	return r

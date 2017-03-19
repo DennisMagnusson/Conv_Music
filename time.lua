@@ -2,7 +2,7 @@ require 'midiparse'
 require 'lfs'
 require 'optim'
 require 'xlua'
-require 'rnn' --TODO Remove, just for a quick test
+require 'rnn'
 json = require 'json'
 
 cmd = torch.CmdLine()
@@ -45,7 +45,7 @@ while true do
 	opt.channels[#opt.channels+1] = tonumber(str)
 end
 
-data_width = 88
+data_width = 89
 curr_ep = 1
 start_ep = 0
 start_index = 1
@@ -57,7 +57,6 @@ batches = 0
 resume = false
 
 prev_valid = 0
-
 
 meta = {batchsize=opt.batchsize,
 		rho=opt.rho,
@@ -107,7 +106,7 @@ function create_dataset(dir)
 	for filename in lfs.dir(dir.."/.") do
 		if filename[1] == '.' then goto cont end
 		if opt.datasize ~= 0 and #d >= opt.datasize then return d end
-		local song = parse(dir.."/"..filename)
+		local song = parse(dir.."/"..filename, true)
 		if #song > 2 then
 			d[#d+1] = torch.Tensor(song)
 		end
@@ -162,10 +161,6 @@ function feval(p)
 
 	batch = next_batch()
 	local x = batch[1]
-
-	--Remove these lines to switch to rnn
-	x = x:transpose(2, 3)
-	x = torch.reshape(x, opt.batchsize, 1, data_width, opt.rho)
 	local y = batch[2]
 
 	gradparams:zero()
@@ -194,7 +189,7 @@ function train()
 				xlua.progress(100*(e-1)+progress, 100*opt.ep)
 			end
 
-			optim.adam(feval, params, optim_cfg)
+			optim.adagrad(feval, params, optim_cfg)
 			collectgarbage()
 		end
 	end
@@ -256,48 +251,19 @@ end
 function create_model()
 	local model = nn.Sequential()
 
-	--Input is 88x16 for now
-	--Or is it 16x88?
-	--Is pooling a bad idea? I think so
-	--12x1 convolution with 20 output channels
-	--Input channels, output channels, kernel width, kernel height, stepx,y, padx,y)
-	--Hmm, pooling hardly does anything for the performance
-	model:add(nn.SpatialConvolution(1, opt.channels[1], 5, 13, 1, 1, 2, 6))
-	model:add(nn.ReLU())
-	--model:add(nn.SpatialMaxPooling(1, 5, 1, 4, 0, 2))
-	--model:add(nn.SpatialMaxPooling(4, 1, 4, 1, 2, 0))
-	--12x4 conv with 40 output channels
-	model:add(nn.SpatialConvolution(opt.channels[1], opt.channels[2], 5, 5, 1, 1, 2, 2))
-	--model:add(nn.SpatialMaxPooling(4, 1, 4, 1, 2, 0))
-	model:add(nn.ReLU())
-
-	--Idea: pooling on the y-axis, to drastically reduce computation, so 1xrho pooling
-
-	model:add(nn.Reshape(opt.channels[2]*data_width*opt.rho))
-	model:add(nn.Linear(opt.channels[2]*data_width*opt.rho, 128))
-
-	--Output layer
-	model:add(nn.Dropout(opt.dropout))
-	model:add(nn.Linear(128, data_width))
-	model:add(nn.Sigmoid())
-	
-	--Let's compare to a recurrent
-	--[[
-	--TODO RemoveMe
 	local rnn = nn.Sequential()
-	rnn:add(nn.FastLSTM(88, 256, opt.rho))
+	rnn:add(nn.FastLSTM(89, 128, opt.rho))--Should we have things other than time?
 	rnn:add(nn.SoftSign())
-	rnn:add(nn.FastLSTM(256, 128, opt.rho))
+	rnn:add(nn.FastLSTM(128, 64, opt.rho))
 	rnn:add(nn.SoftSign())
+
 	model:add(nn.SplitTable(1, 2))
 	model:add(nn.Sequencer(rnn))
 	model:add(nn.SelectTable(-1))
-	--model:add(nn.Dropout(opt.dropout))
-	model:add(nn.Linear(128, 128))
+	model:add(nn.Linear(64, 64))
 	model:add(nn.SoftSign())
-	model:add(nn.Linear(128, 88))
-	model:add(nn.Sigmoid())
-	]]
+	model:add(nn.Linear(64, 1))
+	model:add(nn.ReLU())
 
 	if opt.opencl then 
 		return model:cl()
@@ -344,13 +310,12 @@ end
 
 params, gradparams = model:getParameters()
 --criterion = nn.MSECriterion(true)
-criterion = nn.BCECriterion()--BCE is waaaay better
+criterion = nn.BCECriterion()--BCE is waaaay better, sometimes
 if opt.opencl then criterion:cl() end
 
 data = create_dataset(opt.d)
 
---data = normalize_col(data, 92)
---data = normalize_col(data, 93)
+data = normalize_col(data, 89)
 
 if opt.datasize ~= 0 then
 	local l = #data

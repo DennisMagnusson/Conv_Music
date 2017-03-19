@@ -12,8 +12,15 @@ else
 end
 
 
-function validate(model, rho, batchsize, dir, criterion)
-	local valid_data = create_data(dir) --Faster than saving
+function validate(model, rho, batchsize, dir, criterion, time=false)
+	local valid_data = create_data(dir, time) --Faster than saving
+
+	local width = -1
+	if time then
+		width = 89
+	else
+		width = 88
+	end
 
 	local toterr = 0
 	local c = 0
@@ -62,6 +69,8 @@ function validate(model, rho, batchsize, dir, criterion)
 end
 
 function normalize(r, col)
+	if r[2][col] == nil then return r--In case time is false
+
 	for i=1, #r do
 		for u=1, #r[i] do
 			if r[i][u][col] > 4000 then r[i][u][col] = 4000 end
@@ -71,15 +80,14 @@ function normalize(r, col)
 	return r
 end
 
-function create_data(dir)
+function create_data(dir, time)
 	local songs = {}
 	for filename in lfs.dir(dir.."/.") do
 		if filename[1] == '.' then goto cont end
-		local song = parse(dir.."/"..filename) 
+		local song = parse(dir.."/"..filename, time)
 		songs[#songs+1] = song
 		::cont::
 	end
-	--songs = normalize(songs, 92)
-	--songs = normalize(songs, 93)
+	songs = normalize(songs, 89)
 	return songs
 end
