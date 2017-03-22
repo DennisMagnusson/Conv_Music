@@ -14,7 +14,8 @@ cmd:option('-ep', 1, 'Number of epochs')
 cmd:option('-batchsize', 128, 'Batch Size')
 cmd:option('-rho', 16, 'Rho value')
 cmd:option('-denselayers', 1, 'Number of dense layers')
-cmd:option('-channels', '2,5', 'Sizes of hidden layers, seperated by commas')
+cmd:option('-recurrentlayers', 1, 'Number of recurrent layers')
+cmd:option('-hiddensizes', '100,100', 'Sizes of hidden layers, seperated by commas')
 cmd:option('-dropout', 0.5, 'Dropout probability')
 cmd:option('-lr', 0.0001, 'Learning rate')
 cmd:option('-lrdecay', 1e-5, 'Learning rate decay')
@@ -35,14 +36,18 @@ else
 end
 
 
-local h = opt.channels
-opt.channels = {}
+local h = opt.hiddensizes
+opt.hiddensizes = {}
 while true do
 	if h:len() == 0 then break end
 	local c = h:find(',') or h:len()+1
 	local str = h:sub(1, c-1)
 	h = h:sub(c+1, h:len())
-	opt.channels[#opt.channels+1] = tonumber(str)
+	opt.hiddensizes[#opt.hiddensizes+1] = tonumber(str)
+end
+
+if #opt.hiddensizes ~= opt.recurrentlayers+opt.denselayers then
+	assert(false, "Number of hiddensizes is not equal to number of layers")
 end
 
 data_width = 89
@@ -62,6 +67,7 @@ meta = {batchsize=opt.batchsize,
 		rho=opt.rho,
 		ep=opt.ep,
 		denselayers=opt.denselayers,
+		recurrentlayers=opt.recurrentlayers,
 		hiddensizes=opt.hiddensizes,
 		dropout=opt.dropout,
 		lr=opt.lr,
@@ -70,7 +76,7 @@ meta = {batchsize=opt.batchsize,
 		d=opt.d,
 		vd=opt.vd,
 		opencl=opt.opencl
-	   }
+}
 
 -- Min-Maxed logarithms for data with long tail
 -- x_n = (ln(x+1)-ln(x_min)) / (ln(x_max)-ln(m_min))
@@ -250,20 +256,31 @@ end
 
 function create_model()
 	local model = nn.Sequential()
-
 	local rnn = nn.Sequential()
-	rnn:add(nn.FastLSTM(89, 128, opt.rho))--Should we have things other than time?
+
+	local l = 1
+	
+	--Recurrent layer
+	rnn:add(nn.FastLSTM(data_width, opt.hiddensizes[l], opt.rho))
 	rnn:add(nn.SoftSign())
-	rnn:add(nn.FastLSTM(128, 64, opt.rho))
-	rnn:add(nn.SoftSign())
+	for i=1, opt.recurrentlayers-1 do
+		l = l+1
+		rnn:add(nn.FastLSTM(opt.hiddensizes[l-1], opt.hiddensizes[l], opt.rho))
+		rnn:add(nn.SoftSign())
+	end
 
 	model:add(nn.SplitTable(1, 2))
 	model:add(nn.Sequencer(rnn))
 	model:add(nn.SelectTable(-1))
-	model:add(nn.Linear(64, 64))
-	model:add(nn.SoftSign())
-	model:add(nn.Linear(64, 1))
-	model:add(nn.ReLU())
+	--Dense layers
+	for i=1, opt.denselayers do
+		l = l+1
+		model:add(nn.Linear(opt.hiddensizes[l-1], opt.hiddensizes[l]))
+		model:add(nn.SoftSign())
+	end
+	--Output layer
+	model:add(nn.Linear(opt.hiddensizes[l], 1))
+	model:add(nn.ReLU())--Time can't be negative
 
 	if opt.opencl then 
 		return model:cl()
