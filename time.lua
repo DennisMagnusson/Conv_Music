@@ -6,7 +6,7 @@ require 'rnn'
 json = require 'json'
 
 cmd = torch.CmdLine()
-cmd:option('-d', 'slowtest', 'Dataset directory')
+cmd:option('-d', '', 'Dataset directory')
 cmd:option('-vd', '', 'Validation data directory')
 cmd:option('-datasize', 0, 'Size of dataset (for benchmarking)')
 cmd:option('-o', '', 'Model filename')
@@ -16,7 +16,7 @@ cmd:option('-rho', 16, 'Rho value')
 cmd:option('-denselayers', 1, 'Number of dense layers')
 cmd:option('-recurrentlayers', 1, 'Number of recurrent layers')
 cmd:option('-hiddensizes', '100,100', 'Sizes of hidden layers, seperated by commas')
-cmd:option('-dropout', 0.5, 'Dropout probability')
+cmd:option('-dropout', 0.25, 'Dropout probability')
 cmd:option('-lr', 0.0001, 'Learning rate')
 cmd:option('-lrdecay', 1e-5, 'Learning rate decay')
 cmd:option('-cpu', false, 'Use CPU')
@@ -228,7 +228,7 @@ function create_batch(start_index)
 	end
 	--Create batch
 	local x = torch.Tensor(opt.batchsize, opt.rho, data_width)
-	local y = torch.Tensor(opt.batchsize, data_width)
+	local y = torch.Tensor(opt.batchsize, 1)
 
 	for u = 1, opt.batchsize do
 		::s::
@@ -243,7 +243,7 @@ function create_batch(start_index)
 		for o = opt.rho, 1, -1 do
 			x[u][o] = song[i+o+u]
 		end
-		y[u] = song[i+u+opt.rho+1]
+		y[u] = song[i+u+opt.rho+1][89]--Only get time
 	end
 
 	if opt.opencl then
@@ -326,8 +326,7 @@ else
 end
 
 params, gradparams = model:getParameters()
---criterion = nn.MSECriterion(true)
-criterion = nn.BCECriterion()--BCE is waaaay better, sometimes
+criterion = nn.MSECriterion(true)
 if opt.opencl then criterion:cl() end
 
 data = create_dataset(opt.d)
