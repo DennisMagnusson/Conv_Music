@@ -243,7 +243,8 @@ function create_batch(start_index)
 		for o = opt.rho, 1, -1 do
 			x[u][o] = song[i+o+u]
 		end
-		y[u] = song[i+u+opt.rho+1][89]--Only get time
+		x[u][opt.rho][89] = 1 --We'll just set this to 1 for now
+		y[u] = song[i+u+opt.rho][89]--Just the time as output
 	end
 
 	if opt.opencl then
@@ -254,7 +255,7 @@ function create_batch(start_index)
 	return {x, y}
 end
 
-function create_model()
+function create_time_model()
 	local model = nn.Sequential()
 	local rnn = nn.Sequential()
 
@@ -317,7 +318,7 @@ if lfs.attributes(opt.o) then--Resume training
 	print("opt.ep:", opt.ep, "meta.ep", meta.ep)
 	logger = optim.Logger(opt.o..".log2")
 else
-	model = create_model()
+	model = create_time_model()
 	
 	if opt.o ~= '' then
 		logger = optim.Logger(opt.o..".log")
@@ -330,7 +331,6 @@ criterion = nn.MSECriterion(true)
 if opt.opencl then criterion:cl() end
 
 data = create_dataset(opt.d)
-
 data = normalize_col(data, 89)
 
 if opt.datasize ~= 0 then
