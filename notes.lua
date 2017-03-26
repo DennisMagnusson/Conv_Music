@@ -1,6 +1,7 @@
 require 'midiparse'
 require 'lfs'
 require 'optim'
+require 'tools'
 require 'xlua'
 require 'rnn' --TODO Remove, just for a quick test
 json = require 'json'
@@ -85,25 +86,7 @@ meta = {batchsize=opt.batchsize,
 		vd=opt.vd,
 		opencl=opt.opencl,
 		kernelsizes=opt.kernelsizes
-	   }
-
-
---TODO Make parse parse both time and notes in two separate tables, maybe
-function create_dataset(dir)
-	local d = {}
-
-	for filename in lfs.dir(dir.."/.") do
-		if filename[1] == '.' then goto cont end
-		if opt.datasize ~= 0 and #d >= opt.datasize then return d end
-		local song = parse(dir.."/"..filename)
-		if #song > 2 then
-			d[#d+1] = torch.Tensor(song)
-		end
-		::cont::
-	end
-
-	return d
-end
+}
 
 function new_epoch()
 	start_index = 1
@@ -329,7 +312,7 @@ params, gradparams = model:getParameters()
 criterion = nn.BCECriterion()--BCE is waaaay better
 if opt.opencl then criterion:cl() end
 
-data = create_dataset(opt.d)
+data = create_dataset(opt.d, false, opt.datasize)
 
 if opt.datasize ~= 0 then
 	local l = #data
