@@ -193,14 +193,6 @@ function train()
 	model:evaluate() --Exit training mode
 end
 
-function get_total_len(data)
-	local i = 0
-	for k, s in pairs(data) do
-		i = i + s:size()[1]
-	end
-	return i
-end
-
 function create_batch(start_index)
 	local i = start_index
 	local song = torch.Tensor()
