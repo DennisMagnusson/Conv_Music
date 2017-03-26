@@ -1,6 +1,7 @@
 require 'midiparse'
 require 'lfs'
 require 'optim'
+require 'tools'
 require 'xlua'
 require 'rnn'
 json = require 'json'
@@ -36,32 +37,33 @@ else
 end
 
 
-local h = opt.hiddensizes
-opt.hiddensizes = {}
-while true do
-	if h:len() == 0 then break end
-	local c = h:find(',') or h:len()+1
-	local str = h:sub(1, c-1)
-	h = h:sub(c+1, h:len())
-	opt.hiddensizes[#opt.hiddensizes+1] = tonumber(str)
+function parse_hiddensizes(h)
+	local hiddensizes = {}
+	while true do
+		if h:len() == 0 then break end
+		local c = h:find(',') or h:len()+1
+		local str = h:sub(1, c-1)
+		h = h:sub(c+1, h:len())
+		hiddensizes[#hiddensizes+1] = tonumber(str)
+	end
+	return hiddensizes
 end
 
+opt.hiddensizes = parse_hiddensizes(opt.hiddensizes)
 if #opt.hiddensizes ~= opt.recurrentlayers+opt.denselayers then
 	assert(false, "Number of hiddensizes is not equal to number of layers")
 end
 
-data_width = 89
+DATA_WIDTH = 89
 curr_ep = 1
 start_ep = 0
 start_index = 1
 
-totloss = 0
 loss = 0
-batches = 0
+valid_loss = 0
+batches = 0 --TODO Can be constant, probably somehow
 
 resume = false
-
-prev_valid = 0
 
 meta = {batchsize=opt.batchsize,
 		rho=opt.rho,
@@ -106,43 +108,31 @@ function normalize_col(r, col)
 	return r
 end
 
-function create_dataset(dir)
-	local d = {}
-
-	for filename in lfs.dir(dir.."/.") do
-		if filename[1] == '.' then goto cont end
-		if opt.datasize ~= 0 and #d >= opt.datasize then return d end
-		local song = parse(dir.."/"..filename, true)
-		if #song > 2 then
-			d[#d+1] = torch.Tensor(song)
-		end
-		::cont::
-	end
-
-	return d
-end
-
 function new_epoch()
 	start_index = 1
 	local prev_loss = loss
-	loss = totloss/batches
+	loss = loss/batches
 	local delta = loss-prev_loss
-	model:evaluate()
-	validation_err = validate(model, opt.rho, opt.batchsize, opt.vd, criterion)
-	model:training()
-	local v_delta = validation_err - prev_valid
-	prev_valid = validation_err
 
-	print(string.format("Ep %d loss=%.8f  dl=%.6e  valid=%.8f  dv=%.6e", curr_ep, loss, delta, validation_err, v_delta))
+	local prev_valid = valid_loss
+
+	model:evaluate()
+	valid_loss = validate(model, opt.rho, opt.batchsize, opt.vd, criterion)
+	model:training()
+
+	local v_delta = valid_loss - prev_valid
+	prev_valid = valid_loss_
+
+	print(string.format("Ep %d loss=%.8f  dl=%.6e  valid=%.8f  dv=%.6e", curr_ep, loss, delta, valid_loss, v_delta))
 	if logger then
-		logger:add{curr_ep, loss, delta, validation_err, v_delta}
+		logger:add{curr_ep, loss, delta, valid_loss, v_delta}
 	end
 
 	curr_ep=curr_ep+1
 
 	if(curr_ep % 10 == 0 and opt.o ~= '') then torch.save(opt.o, model) end --Autosave
 	collectgarbage()
-	totloss = 0
+	loss = 0
 	batches = 0
 end
 
@@ -171,14 +161,14 @@ function feval(p)
 
 	gradparams:zero()
 	local yhat = model:forward(x)
-	local loss = criterion:forward(yhat, y)
+	local train_loss = criterion:forward(yhat, y)
 	local e = torch.mean(torch.abs(yhat-y))
-	totloss = totloss + e--Use real error instead of criterion
+	loss = loss + e--Use real error instead of criterion
 	model:backward(x, criterion:backward(yhat, y))
 
 	collectgarbage()
 
-	return loss, gradparams
+	return train_loss, gradparams
 end
 
 function train()
@@ -227,7 +217,7 @@ function create_batch(start_index)
 		if i < 1 then i = 1 end
 	end
 	--Create batch
-	local x = torch.Tensor(opt.batchsize, opt.rho, data_width)
+	local x = torch.Tensor(opt.batchsize, opt.rho, DATA_WIDTH)
 	local y = torch.Tensor(opt.batchsize, 1)
 
 	for u = 1, opt.batchsize do
@@ -262,7 +252,7 @@ function create_time_model()
 	local l = 1
 	
 	--Recurrent layer
-	rnn:add(nn.FastLSTM(data_width, opt.hiddensizes[l], opt.rho))
+	rnn:add(nn.FastLSTM(DATA_WIDTH, opt.hiddensizes[l], opt.rho))
 	rnn:add(nn.SoftSign())
 	for i=1, opt.recurrentlayers-1 do
 		l = l+1
@@ -330,7 +320,7 @@ params, gradparams = model:getParameters()
 criterion = nn.MSECriterion(true)
 if opt.opencl then criterion:cl() end
 
-data = create_dataset(opt.d)
+data = create_dataset(opt.d, true, opt.datasize)
 data = normalize_col(data, 89)
 
 if opt.datasize ~= 0 then
