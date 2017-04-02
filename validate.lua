@@ -12,7 +12,8 @@ else
 end
 
 
-function validate(model, rho, batchsize, dir, criterion, time=false)
+function validate(model, rho, batchsize, dir, criterion, time)
+	time = time or false
 	local valid_data = create_data(dir, time) --Faster than saving
 
 	local width = -1
@@ -69,7 +70,7 @@ function validate(model, rho, batchsize, dir, criterion, time=false)
 end
 
 function normalize(r, col)
-	if r[2][col] == nil then return r--In case time is false
+	if r[2][col] == nil then return r end--In case time is false
 
 	for i=1, #r do
 		for u=1, #r[i] do
