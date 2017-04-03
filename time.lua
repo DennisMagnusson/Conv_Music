@@ -6,25 +6,7 @@ require 'xlua'
 require 'rnn'
 json = require 'json'
 
-cmd = torch.CmdLine()
-cmd:option('-d', '', 'Dataset directory')
-cmd:option('-vd', '', 'Validation data directory')
-cmd:option('-datasize', 0, 'Size of dataset (for benchmarking)')
-cmd:option('-o', '', 'Model filename')
-cmd:option('-ep', 1, 'Number of epochs')
-cmd:option('-batchsize', 128, 'Batch Size')
-cmd:option('-rho', 16, 'Rho value')
-cmd:option('-denselayers', 1, 'Number of dense layers')
-cmd:option('-recurrentlayers', 1, 'Number of recurrent layers')
-cmd:option('-hiddensizes', '100,100', 'Sizes of hidden layers, seperated by commas')
-cmd:option('-dropout', 0.25, 'Dropout probability')
-cmd:option('-lr', 0.0001, 'Learning rate')
-cmd:option('-lrdecay', 1e-5, 'Learning rate decay')
-cmd:option('-cpu', false, 'Use CPU')
-cmd:option('-weightdecay', 0, 'Weight decay')
-opt = cmd:parse(arg or {})
-
-opt.opencl = not opt.cpu
+opt = get_args(arg, false)
 
 require 'validate'
 
@@ -34,24 +16,6 @@ if opt.opencl then
 else
 	require 'torch'
 	require 'nn'
-end
-
-
-function parse_hiddensizes(h)
-	local hiddensizes = {}
-	while true do
-		if h:len() == 0 then break end
-		local c = h:find(',') or h:len()+1
-		local str = h:sub(1, c-1)
-		h = h:sub(c+1, h:len())
-		hiddensizes[#hiddensizes+1] = tonumber(str)
-	end
-	return hiddensizes
-end
-
-opt.hiddensizes = parse_hiddensizes(opt.hiddensizes)
-if #opt.hiddensizes ~= opt.recurrentlayers+opt.denselayers then
-	assert(false, "Number of hiddensizes is not equal to number of layers")
 end
 
 DATA_WIDTH = 89
@@ -65,16 +29,16 @@ batches = 0 --TODO Can be constant, probably somehow
 
 resume = false
 
-meta = {batchsize=opt.batchsize,
+meta = {bs=opt.bs,
 		rho=opt.rho,
 		ep=opt.ep,
-		denselayers=opt.denselayers,
-		recurrentlayers=opt.recurrentlayers,
-		hiddensizes=opt.hiddensizes,
-		dropout=opt.dropout,
+		dl=opt.dl,
+		rl=opt.rl,
+		hs=opt.hs,
+		drop=opt.drop,
 		lr=opt.lr,
-		lrdecay=opt.lrdecay,
-		weightdecay=opt.weightdecay,
+		lrd=opt.lrd,
+		wd=opt.wd,
 		d=opt.d,
 		vd=opt.vd,
 		opencl=opt.opencl
@@ -117,7 +81,7 @@ function new_epoch()
 	local prev_valid = valid_loss
 
 	model:evaluate()
-	valid_loss = validate(model, opt.rho, opt.batchsize, opt.vd, criterion)
+	valid_loss = validate(model, opt.rho, opt.bs, opt.vd, criterion)
 	model:training()
 
 	local v_delta = valid_loss - prev_valid
@@ -137,7 +101,7 @@ function new_epoch()
 end
 
 function next_batch()
-	start_index = start_index + opt.batchsize
+	start_index = start_index + opt.bs
 
 	batch = create_batch(start_index)
 	if batch == -1 then
@@ -175,7 +139,7 @@ function train()
 	model:training()--Training mode
 	math.randomseed(os.time())
 
-	local optim_cfg = {learningRate=opt.lr, learningRateDecay=opt.lrdecay, weightDecay=opt.weightdecay}
+	local optim_cfg = {learningRate=opt.lr, learningRateDecay=opt.lrd, weightDecay=opt.wd}
 	local progress = -1
 
 	for e=1, opt.ep do
@@ -209,10 +173,12 @@ function create_batch(start_index)
 		if i < 1 then i = 1 end
 	end
 	--Create batch
-	local x = torch.Tensor(opt.batchsize, opt.rho, DATA_WIDTH)
-	local y = torch.Tensor(opt.batchsize, 1)
+	local x = torch.Tensor(opt.bs, opt.rho, DATA_WIDTH)
+	local y = torch.Tensor(opt.bs, 1)
 
-	for u = 1, opt.batchsize do
+	--TODO Song is empty
+
+	for u = 1, opt.bs do
 		::s::
 		if song:size()[1] < i+u+opt.rho+1 then
 			song = data[songindex+1]
@@ -244,11 +210,11 @@ function create_time_model()
 	local l = 1
 	
 	--Recurrent layer
-	rnn:add(nn.FastLSTM(DATA_WIDTH, opt.hiddensizes[l], opt.rho))
+	rnn:add(nn.FastLSTM(DATA_WIDTH, opt.hs[l], opt.rho))
 	rnn:add(nn.SoftSign())
-	for i=1, opt.recurrentlayers-1 do
+	for i=1, opt.rl-1 do
 		l = l+1
-		rnn:add(nn.FastLSTM(opt.hiddensizes[l-1], opt.hiddensizes[l], opt.rho))
+		rnn:add(nn.FastLSTM(opt.hs[l-1], opt.hs[l], opt.rho))
 		rnn:add(nn.SoftSign())
 	end
 
@@ -256,13 +222,13 @@ function create_time_model()
 	model:add(nn.Sequencer(rnn))
 	model:add(nn.SelectTable(-1))
 	--Dense layers
-	for i=1, opt.denselayers do
+	for i=1, opt.dl do
 		l = l+1
-		model:add(nn.Linear(opt.hiddensizes[l-1], opt.hiddensizes[l]))
+		model:add(nn.Linear(opt.hs[l-1], opt.hs[l]))
 		model:add(nn.SoftSign())
 	end
 	--Output layer
-	model:add(nn.Linear(opt.hiddensizes[l], 1))
+	model:add(nn.Linear(opt.hs[l], 1))
 	model:add(nn.ReLU())--Time can't be negative
 
 	if opt.opencl then 
@@ -312,12 +278,12 @@ params, gradparams = model:getParameters()
 criterion = nn.MSECriterion(true)
 if opt.opencl then criterion:cl() end
 
-data = create_dataset(opt.d, true, opt.datasize)
+data = create_dataset(opt.d, true, opt.ds)
 data = normalize_col(data, 89)
 
 if opt.datasize ~= 0 then
 	local l = #data
-	for i=opt.datasize, l do
+	for i=opt.ds, l do
 		data[i] = nil
 	end
 end

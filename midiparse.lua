@@ -9,7 +9,8 @@ local midi = require 'MIDI'
 93		duration
 ]]
 
-function parse(filename, time=false)
+function parse(filename, time)
+	time = time or false
 	local file = assert(io.open(filename, 'r'))
 	local m = midi.midi2ms_score(file:read("*all"))
 	file:close()

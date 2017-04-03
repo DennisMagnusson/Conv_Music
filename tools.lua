@@ -2,7 +2,6 @@ require 'xlua'
 
 function get_args(arg, conv)
 	arg = arg or {}
-	conv = conv or true
 
 	local cmd = torch.CmdLine()
 	cmd:option('-d', '', 'Dataset directory')
@@ -33,6 +32,10 @@ function get_args(arg, conv)
 	if conv then
 		opt.c = parse_str(opt.c)
 		opt.ks= parse_kernel_sizes(opt.ks)
+	else
+		if #opt.hs ~= opt.rl + opt.dl then
+			assert(false, "Number of hiddensizes is not equal to number of layers")
+		end
 	end
 
 	return opt
