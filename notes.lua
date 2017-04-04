@@ -108,36 +108,6 @@ function feval(p)
 	return loss, gradparams
 end
 
-function train()
-	model:training()--Training mode
-	math.randomseed(os.time())
-
-	local optim_cfg = {learningRate=opt.lr, learningRateDecay=opt.lrd, weightDecay=opt.wd}
-	local progress = -1
-
-	for e=1, opt.ep do
-		while curr_ep == start_ep+e do
-			if progress ~= math.floor(100*(start_index/totlen)) then
-				progress = math.floor(100*(start_index/totlen))
-				xlua.progress(100*(e-1)+progress, 100*opt.ep)
-			end
-
-			optim.adam(feval, params, optim_cfg)
-			collectgarbage()
-		end
-	end
-
-	model:evaluate() --Exit training mode
-end
-
-function get_total_len(data)
-	local i = 0
-	for k, s in pairs(data) do
-		i = i + s:size()[1]
-	end
-	return i
-end
-
 function create_batch(start_index)
 	local i = start_index
 	local song = torch.Tensor()
@@ -272,7 +242,7 @@ if opt.opencl then criterion:cl() end
 
 data = create_dataset(opt.d, false, opt.ds)
 
-if opt.datasize ~= 0 then
+if opt.ds ~= 0 then
 	local l = #data
 	for i=opt.ds, l do
 		data[i] = nil
@@ -284,7 +254,7 @@ totlen = get_total_len(data)
 print(curr_ep)
 print(start_ep)
 
-train()
+train(optim.adam)
 
 if opt.o ~= '' then
 	torch.save(opt.o, model)

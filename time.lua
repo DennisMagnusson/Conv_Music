@@ -135,28 +135,6 @@ function feval(p)
 	return train_loss, gradparams
 end
 
-function train()
-	model:training()--Training mode
-	math.randomseed(os.time())
-
-	local optim_cfg = {learningRate=opt.lr, learningRateDecay=opt.lrd, weightDecay=opt.wd}
-	local progress = -1
-
-	for e=1, opt.ep do
-		while curr_ep == start_ep+e do
-			if progress ~= math.floor(100*(start_index/totlen)) then
-				progress = math.floor(100*(start_index/totlen))
-				xlua.progress(100*(e-1)+progress, 100*opt.ep)
-			end
-
-			optim.adagrad(feval, params, optim_cfg)
-			collectgarbage()
-		end
-	end
-
-	model:evaluate() --Exit training mode
-end
-
 function create_batch(start_index)
 	local i = start_index
 	local song = torch.Tensor()
@@ -176,8 +154,6 @@ function create_batch(start_index)
 	local x = torch.Tensor(opt.bs, opt.rho, DATA_WIDTH)
 	local y = torch.Tensor(opt.bs, 1)
 
-	--TODO Song is empty
-
 	for u = 1, opt.bs do
 		::s::
 		if song:size()[1] < i+u+opt.rho+1 then
@@ -191,7 +167,7 @@ function create_batch(start_index)
 		for o = opt.rho, 1, -1 do
 			x[u][o] = song[i+o+u]
 		end
-		x[u][opt.rho][89] = 1 --We'll just set this to 1 for now
+		x[u][opt.rho][89] = 0 --We'll just set this to 0 for now
 		y[u] = song[i+u+opt.rho][89]--Just the time as output
 	end
 
@@ -203,7 +179,7 @@ function create_batch(start_index)
 	return {x, y}
 end
 
-function create_time_model()
+function create_model()
 	local model = nn.Sequential()
 	local rnn = nn.Sequential()
 
@@ -255,7 +231,7 @@ if lfs.attributes(opt.o) then--Resume training
 
 	opt.o = filename
 	opt.ep = ep
-	opt.datasize = 0
+	opt.ds = 0
 
 	print(opt)
 
@@ -266,7 +242,7 @@ if lfs.attributes(opt.o) then--Resume training
 	print("opt.ep:", opt.ep, "meta.ep", meta.ep)
 	logger = optim.Logger(opt.o..".log2")
 else
-	model = create_time_model()
+	model = create_model()
 	
 	if opt.o ~= '' then
 		logger = optim.Logger(opt.o..".log")
@@ -281,7 +257,7 @@ if opt.opencl then criterion:cl() end
 data = create_dataset(opt.d, true, opt.ds)
 data = normalize_col(data, 89)
 
-if opt.datasize ~= 0 then
+if opt.ds ~= 0 then
 	local l = #data
 	for i=opt.ds, l do
 		data[i] = nil
@@ -293,7 +269,7 @@ totlen = get_total_len(data)
 print(curr_ep)
 print(start_ep)
 
-train()
+train(optim.adagrad)
 
 if opt.o ~= '' then
 	torch.save(opt.o, model)

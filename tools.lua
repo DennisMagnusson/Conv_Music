@@ -94,3 +94,26 @@ function create_dataset(dir, time, datasize)
 
 	return d
 end
+
+--function train(model, optimizer, config, feval, params)
+function train(optimizer)
+	model:training()--Training mode
+	math.randomseed(os.time())
+
+	local optim_cfg = {learningRate=opt.lr, learningRateDecay=opt.lrd, weightDecay=opt.wd}
+	local progress = -1
+
+	for e=1, opt.ep do
+		while curr_ep == start_ep+e do
+			if progress ~= math.floor(100*(start_index/totlen)) then
+				progress = math.floor(100*(start_index/totlen))
+				xlua.progress(100*(e-1)+progress, 100*opt.ep)
+			end
+
+			optimizer(feval, params, optim_cfg)
+			collectgarbage()
+		end
+	end
+
+	model:evaluate() --Exit training mode
+end
