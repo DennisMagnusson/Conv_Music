@@ -227,17 +227,20 @@ function create_batch(data, index, time)
 		else
 			y[u] = song[i+u+opt.rho+1]
 		end
+	end
 
-		--Transformations for conv
-		if not time then
-			x = x:transpose(2, 3)
-			x = torch.reshape(x, opt.bs, 1, data_width, opt.rho)
-		end
+	--Transformations for conv
+	if not time then
+		x = x:transpose(2, 3)
+		x = torch.reshape(x, opt.bs, 1, data_width, opt.rho)
+	end
 
-		if opt.opencl then
-			x = x:cl()
-			y = y:cl()
-		end
+	if opt.opencl then
+		x = x:cl()
+		y = y:cl()
+	end
+
+	print({x,y})
 	
 	return {x, y}
 end
