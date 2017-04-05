@@ -91,7 +91,13 @@ function create_dataset(dir, time, datasize)
 		end
 		::cont::
 	end
-
+	--Trim if datasize is entered
+	if opt.ds ~= 0 then
+		local l = #d
+		for i=opt.ds, l do
+			d[i] = nil
+		end
+	end
 	return d
 end
 
@@ -116,4 +122,63 @@ function train(optimizer)
 	end
 
 	model:evaluate() --Exit training mode
+end
+
+function reload_model(filename)
+	local model = torch.load(opt.o)
+	resume = true
+	--Read JSON
+	local file = assert(io.open(opt.o..".meta", 'r'))
+	meta = json.decode(file:read('*all'))
+	file:close()
+	filename = opt.o
+	ep = opt.ep
+
+	--Copy table
+	for key, val in pairs(meta) do
+		opt[key] = val
+	end
+
+	opt.o = filename
+	opt.ep = ep
+	opt.ds = 0
+
+	print(opt)
+
+	curr_ep = meta['ep']+1
+	start_ep = meta['ep']
+	opt.lr = meta['lr']/(1+meta['lrdecay']*meta['ep'])--Restore decayed lr
+	meta['ep'] = meta['ep'] + opt.ep
+	print("opt.ep:", opt.ep, "meta.ep", meta.ep)
+	logger = optim.Logger(opt.o..".log2")
+
+	return model
+end
+
+
+function new_epoch()
+	start_index = 1
+
+	local prev_loss = loss
+	loss = totloss/batches
+	local delta = loss-prev_loss
+
+	model:evaluate()
+	validation_err = validate(model, opt.rho, opt.bs, opt.vd, criterion)
+	model:training()
+
+	local v_delta = validation_err - prev_valid
+	prev_valid = validation_err
+
+	print(string.format("Ep %d loss=%.8f  dl=%.6e  valid=%.8f  dv=%.6e", curr_ep, loss, delta, validation_err, v_delta))
+	if logger then
+		logger:add{curr_ep, loss, delta, validation_err, v_delta}
+	end
+
+	curr_ep=curr_ep+1
+
+	if(curr_ep % 10 == 0 and opt.o ~= '') then torch.save(opt.o, model) end --Autosave
+	collectgarbage()
+	totloss = 0
+	batches = 0
 end

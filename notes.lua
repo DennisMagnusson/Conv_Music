@@ -45,29 +45,6 @@ meta = {bs=opt.bs,
 		ks=opt.ks
 }
 
-function new_epoch()
-	start_index = 1
-	local prev_loss = loss
-	loss = totloss/batches
-	local delta = loss-prev_loss
-	model:evaluate()
-	validation_err = validate(model, opt.rho, opt.bs, opt.vd, criterion)
-	model:training()
-	local v_delta = validation_err - prev_valid
-	prev_valid = validation_err
-
-	print(string.format("Ep %d loss=%.8f  dl=%.6e  valid=%.8f  dv=%.6e", curr_ep, loss, delta, validation_err, v_delta))
-	if logger then
-		logger:add{curr_ep, loss, delta, validation_err, v_delta}
-	end
-
-	curr_ep=curr_ep+1
-
-	if(curr_ep % 10 == 0 and opt.o ~= '') then torch.save(opt.o, model) end --Autosave
-	collectgarbage()
-	totloss = 0
-	batches = 0
-end
 
 function next_batch()
 	start_index = start_index + opt.bs
@@ -201,32 +178,7 @@ function create_model()
 end
 
 if lfs.attributes(opt.o) then--Resume training
-	model = torch.load(opt.o)
-	resume = true
-	--Read JSON
-	local file = assert(io.open(opt.o..".meta", 'r'))
-	meta = json.decode(file:read('*all'))
-	file:close()
-	filename = opt.o
-	ep = opt.ep
-
-	--Copy table
-	for key, val in pairs(meta) do
-		opt[key] = val
-	end
-
-	opt.o = filename
-	opt.ep = ep
-	opt.ds = 0
-
-	print(opt)
-
-	curr_ep = meta['ep']+1
-	start_ep = meta['ep']
-	opt.lr = meta['lr']/(1+meta['lrdecay']*meta['ep'])--Restore decayed lr
-	meta['ep'] = meta['ep'] + opt.ep
-	print("opt.ep:", opt.ep, "meta.ep", meta.ep)
-	logger = optim.Logger(opt.o..".log2")
+	model = reload_model(opt.o)
 else
 	model = create_model()
 	
@@ -241,13 +193,6 @@ criterion = nn.BCECriterion()--BCE is waaaay better
 if opt.opencl then criterion:cl() end
 
 data = create_dataset(opt.d, false, opt.ds)
-
-if opt.ds ~= 0 then
-	local l = #data
-	for i=opt.ds, l do
-		data[i] = nil
-	end
-end
 
 totlen = get_total_len(data)
 
