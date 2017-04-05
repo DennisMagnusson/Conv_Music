@@ -27,6 +27,7 @@ loss = 0
 totloss = 0
 valid_loss = 0
 batches = 0 --TODO Can be constant, probably somehow
+prev_valid = 0
 
 resume = false
 
@@ -73,14 +74,14 @@ function normalize_col(r, col)
 	return r
 end
 
-function next_batch()
-	start_index = start_index + opt.bs
-
-	batch = create_batch(start_index)
+function next_batch(time)
+	batch = create_batch(data, start_index, true)
 	if batch == -1 then
-		new_epoch()
-		batch = create_batch(start_index)
+		new_epoch(time)
+		batch = create_batch(data, start_index, true)
 	end
+
+	start_index = start_index + opt.bs
 
 	batches = batches + 1
 
@@ -92,7 +93,7 @@ function feval(p)
 		params:copy(p)
 	end
 
-	batch = next_batch()
+	batch = next_batch(true)
 	local x = batch[1]
 	local y = batch[2]
 
@@ -107,53 +108,6 @@ function feval(p)
 
 	return train_loss, gradparams
 end
-
---TODO Remove after testing the other one
---[[
-function create_batch(start_index)
-	local i = start_index
-	local song = torch.Tensor()
-	local songindex = 0
-	--Select the correct song
-	for k, s in pairs(data) do
-		if s:size()[1] > i then
-			song = s
-			songindex = k
-			break
-		else
-			i = i - s:size()[1]
-		end
-		if i < 1 then i = 1 end
-	end
-	--Create batch
-	local x = torch.Tensor(opt.bs, opt.rho, data_width)
-	local y = torch.Tensor(opt.bs, 1)
-
-	for u = 1, opt.bs do
-		::s::
-		if song:size()[1] < i+u+opt.rho+1 then
-			song = data[songindex+1]
-			if song==nil then return -1 end
-			songindex = songindex+1
-			i=1
-			goto s
-		end
-
-		for o = opt.rho, 1, -1 do
-			x[u][o] = song[i+o+u]
-		end
-		x[u][opt.rho][89] = 0 --We'll just set this to 0 for now
-		y[u] = song[i+u+opt.rho][89]--Just the time as output
-	end
-
-	if opt.opencl then
-		x = x:cl()
-		y = y:cl()
-	end
-
-	return {x, y}
-end
-]]
 
 function create_model()
 	local model = nn.Sequential()

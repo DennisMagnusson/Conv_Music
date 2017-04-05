@@ -83,7 +83,7 @@ function create_dataset(dir, time, datasize)
 	local d = {}
 
 	for filename in lfs.dir(dir.."/") do
-		if filename[1] == '.' then goto cont end
+		if filename:sub(1,1) == '.' then goto cont end
 		if datasize ~= 0 and #d >= datasize then return d end
 		local song = parse(dir..'/'..filename, time)
 		if #song > 2 then
@@ -156,7 +156,7 @@ function reload_model(filename)
 end
 
 
-function new_epoch()
+function new_epoch(time)
 	start_index = 1
 
 	local prev_loss = loss
@@ -164,7 +164,7 @@ function new_epoch()
 	local delta = loss-prev_loss
 
 	model:evaluate()
-	validation_err = validate(model, opt.rho, opt.bs, opt.vd, criterion)
+	validation_err = validate(model, opt.rho, opt.bs, opt.vd, criterion, time)
 	model:training()
 
 	local v_delta = validation_err - prev_valid
@@ -177,21 +177,22 @@ function new_epoch()
 
 	curr_ep=curr_ep+1
 
-	if(curr_ep % 10 == 0 and opt.o ~= '') then torch.save(opt.o, model) end --Autosave
+	--Autosave
+	if(curr_ep % 10 == 0 and opt.o ~= '') then torch.save(opt.o, model) end
 	collectgarbage()
 	totloss = 0
 	batches = 0
 end
 
---TODO Needs testing
 function create_batch(data, index, time)
-	local song = torch.Tensor()
+	local song = nil
 	local i = index
 	local songindex = -1
+
 	--Select song
 	for k, s in pairs(data) do
 		if s:size()[1] > i then
-			song = s
+			song = torch.Tensor(s)
 			songindex = k
 			break
 		else
@@ -199,6 +200,8 @@ function create_batch(data, index, time)
 		end
 		if i < 1 then i = 1 end
 	end
+
+	if not song then return -1 end
 
 	--Create batch
 	if time then output_width = 1
@@ -240,8 +243,6 @@ function create_batch(data, index, time)
 		y = y:cl()
 	end
 
-	print({x,y})
-	
 	return {x, y}
 end
 

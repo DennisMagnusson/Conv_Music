@@ -46,14 +46,14 @@ meta = {bs=opt.bs,
 }
 
 
-function next_batch()
-	start_index = start_index + opt.bs
-
-	batch = create_batch(start_index)
+function next_batch(time)
+	batch = create_batch(data, start_index, time)
 	if batch == -1 then
-		new_epoch()
-		batch = create_batch(start_index)
+		new_epoch(time)
+		batch = create_batch(data, start_index, time)
 	end
+
+	start_index = start_index + opt.bs
 
 	batches = batches + 1
 
@@ -65,7 +65,7 @@ function feval(p)
 		params:copy(p)
 	end
 
-	batch = next_batch()
+	batch = next_batch(false)
 	local x = batch[1]
 
 	--Remove these lines to switch to rnn
@@ -84,51 +84,6 @@ function feval(p)
 
 	return loss, gradparams
 end
-
---[[
-function create_batch(start_index)
-	local i = start_index
-	local song = torch.Tensor()
-	local songindex = 0
-	--Select the correct song
-	for k, s in pairs(data) do
-		if s:size()[1] > i then
-			song = s
-			songindex = k
-			break
-		else
-			i = i - s:size()[1]
-		end
-		if i < 1 then i = 1 end
-	end
-	--Create batch
-	local x = torch.Tensor(opt.bs, opt.rho, data_width)
-	local y = torch.Tensor(opt.bs, data_width)
-
-	for u = 1, opt.bs do
-		::s::
-		if song:size()[1] < i+u+opt.rho+1 then
-			song = data[songindex+1]
-			if song==nil then return -1 end
-			songindex = songindex+1
-			i=1
-			goto s
-		end
-
-		for o = opt.rho, 1, -1 do
-			x[u][o] = song[i+o+u]
-		end
-		y[u] = song[i+u+opt.rho+1]
-	end
-
-	if opt.opencl then
-		x = x:cl()
-		y = y:cl()
-	end
-
-	return {x, y}
-end
-]]
 
 function create_model()
 	local model = nn.Sequential()
