@@ -18,12 +18,13 @@ else
 	require 'nn'
 end
 
-DATA_WIDTH = 89
+data_width = 89
 curr_ep = 1
 start_ep = 0
 start_index = 1
 
 loss = 0
+totloss = 0
 valid_loss = 0
 batches = 0 --TODO Can be constant, probably somehow
 
@@ -107,6 +108,8 @@ function feval(p)
 	return train_loss, gradparams
 end
 
+--TODO Remove after testing the other one
+--[[
 function create_batch(start_index)
 	local i = start_index
 	local song = torch.Tensor()
@@ -123,7 +126,7 @@ function create_batch(start_index)
 		if i < 1 then i = 1 end
 	end
 	--Create batch
-	local x = torch.Tensor(opt.bs, opt.rho, DATA_WIDTH)
+	local x = torch.Tensor(opt.bs, opt.rho, data_width)
 	local y = torch.Tensor(opt.bs, 1)
 
 	for u = 1, opt.bs do
@@ -150,6 +153,7 @@ function create_batch(start_index)
 
 	return {x, y}
 end
+]]
 
 function create_model()
 	local model = nn.Sequential()
@@ -158,7 +162,7 @@ function create_model()
 	local l = 1
 	
 	--Recurrent layer
-	rnn:add(nn.FastLSTM(DATA_WIDTH, opt.hs[l], opt.rho))
+	rnn:add(nn.FastLSTM(data_width, opt.hs[l], opt.rho))
 	rnn:add(nn.SoftSign())
 	for i=1, opt.rl-1 do
 		l = l+1
@@ -212,10 +216,5 @@ print(start_ep)
 train(optim.adagrad)
 
 if opt.o ~= '' then
-	torch.save(opt.o, model)
-	local file = assert(io.open(opt.o..".meta", 'w'))
-	file:write(json.encode(meta))
-	file:close()
-	--Merge the logs
-	if resume then os.execute("cat "..opt.o..".log2 >> "..opt.o..".log") end
+	save(model, opt.o)
 end

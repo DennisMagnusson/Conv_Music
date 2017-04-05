@@ -85,6 +85,7 @@ function feval(p)
 	return loss, gradparams
 end
 
+--[[
 function create_batch(start_index)
 	local i = start_index
 	local song = torch.Tensor()
@@ -127,6 +128,7 @@ function create_batch(start_index)
 
 	return {x, y}
 end
+]]
 
 function create_model()
 	local model = nn.Sequential()
@@ -202,10 +204,5 @@ print(start_ep)
 train(optim.adam)
 
 if opt.o ~= '' then
-	torch.save(opt.o, model)
-	local file = assert(io.open(opt.o..".meta", 'w'))
-	file:write(json.encode(meta))
-	file:close()
-	--Merge the logs
-	if resume then os.execute("cat "..opt.o..".log2 >> "..opt.o..".log") end
+	save(model, opt.o)
 end

@@ -182,3 +182,73 @@ function new_epoch()
 	totloss = 0
 	batches = 0
 end
+
+--TODO Needs testing
+function create_batch(data, index, time)
+	local song = torch.Tensor()
+	local i = index
+	local songindex = -1
+	--Select song
+	for k, s in pairs(data) do
+		if s:size()[1] > i then
+			song = s
+			songindex = k
+			break
+		else
+			i = i - s:size()[1]
+		end
+		if i < 1 then i = 1 end
+	end
+
+	--Create batch
+	if time then output_width = 1
+	else output_width = 88 end
+
+	local x = torch.Tensor(opt.bs, opt.rho, data_width)
+	local y = torch.Tensor(opt.bs, output_width)
+
+	for u=1, opt.bs do
+		::s::
+		--Go to next song if finished
+		if song:size()[1] < i+u+opt.rho+1 then
+			--Break if data is end
+			if songindex == #data then break end
+			song = data[songindex+1]
+			i=1
+			goto s
+		end
+		
+		for o = opt.rho, 1, -1 do
+			x[u][o] = song[i+o+u]
+		end
+		if time then
+			y[u] = song[i+u+opt.rho][89]
+			x[u][opt.rho][89] = 0
+		else
+			y[u] = song[i+u+opt.rho+1]
+		end
+
+		--Transformations for conv
+		if not time then
+			x = x:transpose(2, 3)
+			x = torch.reshape(x, opt.bs, 1, data_width, opt.rho)
+		end
+
+		if opt.opencl then
+			x = x:cl()
+			y = y:cl()
+		end
+	
+	return {x, y}
+end
+
+function save(model, out)
+	torch.save(out, model)
+	local file = assert(io.open(out..".meta", 'w'))
+	file:write(json.encode(meta))
+	file:close()
+	--Merge logs if needed
+	if resume then 
+		os.execute("cat "..out.."log2 >> "..out..".log")
+	end
+end
