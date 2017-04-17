@@ -96,10 +96,13 @@ function create_model()
 		local pady = math.floor(ky/2)
 		local c_in = opt.c[n-1] or 1
 		local c_out= opt.c[n]
-		model:add(nn.SpatialConvolution(c_in, c_out, kx, ky, 1, 1, padx, pady))
+		--Hmmm, looks like x and y are messed up FIXME
+		--FIXME Swapping x and y as a "temporary solution"
+		model:add(nn.SpatialConvolution(c_in, c_out, ky, kx, ry, 1, pady, padx))
 		model:add(nn.ReLU())
 	end
-	
+
+	--TODO May wanna remove some magic numbers here
 	size = opt.c[#opt.ks] * data_width * opt.rho
 	model:add(nn.Reshape(size))
 	model:add(nn.Linear(size, 128))

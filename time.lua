@@ -23,13 +23,12 @@ curr_ep = 1
 start_ep = 0
 start_index = 1
 
-loss = 0
 totloss = 0
-valid_loss = 0
+loss = 0
 batches = 0 --TODO Can be constant, probably somehow
-prev_valid = 0
 
 resume = false
+prev_valid = 0
 
 meta = {bs=opt.bs,
 		rho=opt.rho,
@@ -64,7 +63,7 @@ function normalize_col(r, col)
 
 	for i=1, #r do
 		for u=1, r[i]:size()[1] do
-			r[i][u][col] = (r[i][u][col] - min)/(max - min)
+			r[i][u][col] = (r[i][u][col] - min)/math.log(4000)
 		end
 	end
 
@@ -101,7 +100,7 @@ function feval(p)
 	local yhat = model:forward(x)
 	local train_loss = criterion:forward(yhat, y)
 	local e = torch.mean(torch.abs(yhat-y))
-	loss = loss + e--Use real error instead of criterion
+	totloss = totloss + e--Use real error instead of criterion
 	model:backward(x, criterion:backward(yhat, y))
 
 	collectgarbage()
@@ -135,7 +134,7 @@ function create_model()
 	end
 	--Output layer
 	model:add(nn.Linear(opt.hs[l], 1))
-	model:add(nn.ReLU())--Time can't be negative
+	model:add(nn.Sigmoid())--ReLU was a bad idea
 
 	if opt.opencl then 
 		return model:cl()

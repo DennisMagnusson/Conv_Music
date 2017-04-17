@@ -101,7 +101,6 @@ function create_dataset(dir, time, datasize)
 	return d
 end
 
---function train(model, optimizer, config, feval, params)
 function train(optimizer)
 	model:training()--Training mode
 	math.randomseed(os.time())
@@ -164,7 +163,7 @@ function new_epoch(time)
 	local delta = loss-prev_loss
 
 	model:evaluate()
-	validation_err = validate(model, opt.rho, opt.bs, opt.vd, criterion, time)
+	validation_err = validate(model, opt.rho, opt.bs, opt.vd, time)
 	model:training()
 
 	local v_delta = validation_err - prev_valid
@@ -217,6 +216,7 @@ function create_batch(data, index, time)
 			--Break if data is end
 			if songindex == #data then break end
 			song = data[songindex+1]
+			songindex = songindex+1
 			i=1
 			goto s
 		end

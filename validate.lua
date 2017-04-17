@@ -11,9 +11,24 @@ else
 	require 'nn'
 end
 
+--[[
+Okay, some thoughts:
+Datasets are the same, confirmed.
 
-function validate(model, rho, batchsize, dir, criterion, time)
-	local valid_data = create_data(dir, time) --Faster than saving
+But the end of the valid_data was just zeros.
+This must mean that the end of data is also zeros.
+May be some issue in create_batch().
+
+Also totloss is much larger than the other loss. Why?
+
+
+
+]]
+
+
+function validate(model, rho, batchsize, dir, time)
+	local valid_data = create_dataset(dir, time, 0) --Faster than saving
+	valid_data = normalize_col(valid_data, 89)
 
 	local width = -1
 	if time then
@@ -30,19 +45,25 @@ function validate(model, rho, batchsize, dir, criterion, time)
 
 	while true do
 		local batch = create_batch(valid_data, i, time)
-		if batch == -1 then break end
+		if batch == -1 then 
+			break
+		end
 		local x = batch[1]
 		local y = batch[2]
+
 		if opt.opencl then
 			x = x:cl()
 			y = y:cl()
 		end
 
 		local pred = model:forward(x)
-		local err = torch.mean(torch.abs(y - pred))
+		local err = torch.mean(torch.abs(pred-y))
 		if err ~= err then--If err is nan
+			print("c=",c)
+			c = c-1
 			break--Temporary solution, lol
 		end
+
 
 		toterr = toterr + err
 		c = c + 1
@@ -58,7 +79,7 @@ function normalize(r, col)
 	for i=1, #r do
 		for u=1, r[i]:size()[1] do
 			if r[i][u][col] > 4000 then r[i][u][col] = 4000 end
-			r[i][u][col] = math.log(r[i][u][col]+1) / 8.294
+			r[i][u][col] = math.log(r[i][u][col]+1) / math.log(4000) 
 		end
 	end
 	return r
