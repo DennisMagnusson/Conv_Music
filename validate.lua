@@ -11,21 +11,6 @@ else
 	require 'nn'
 end
 
---[[
-Okay, some thoughts:
-Datasets are the same, confirmed.
-
-But the end of the valid_data was just zeros.
-This must mean that the end of data is also zeros.
-May be some issue in create_batch().
-
-Also totloss is much larger than the other loss. Why?
-
-
-
-]]
-
-
 function validate(model, rho, batchsize, dir, time)
 	local valid_data = create_dataset(dir, time, 0) --Faster than saving
 	valid_data = normalize_col(valid_data, 89)
